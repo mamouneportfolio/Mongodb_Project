@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>UserVault — Gestion de profils</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0c0c10;
+    --surface: #13131a;
+    --surface2: #1a1a24;
+    --border: #2a2a38;
+    --accent: #7c6af7;
+    --accent2: #f76a8f;
+    --text: #e8e8f0;
+    --muted: #6b6b85;
+    --green: #4ade80;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --radius: 12px;
+    --font: 'Syne', sans-serif;
+    --mono: 'DM Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Noise overlay */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 0;
+  }
+
+  /* ── Layout ── */
+  .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; position: relative; z-index: 1; }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 32px 20px;
+    display: flex; flex-direction: column; gap: 8px;
+    position: sticky; top: 0; height: 100vh;
+  }
+
+  .logo {
+    font-size: 22px; font-weight: 800; letter-spacing: -0.5px;
+    color: var(--text); margin-bottom: 32px; padding: 0 8px;
+  }
+  .logo span { color: var(--accent); }
+
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-radius: 8px;
+    cursor: pointer; font-size: 14px; font-weight: 600;
+    color: var(--muted); transition: all .15s ease;
+    border: none; background: none; width: 100%; text-align: left;
+  }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active { background: rgba(124,106,247,.15); color: var(--accent); }
+  .nav-item .icon { font-size: 17px; width: 20px; text-align: center; }
+
+  .sidebar-sep { height: 1px; background: var(--border); margin: 8px 0; }
+
+  .stat-card {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px; margin-top: auto;
+  }
+  .stat-card .label { font-size: 11px; color: var(--muted); font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; }
+  .stat-card .value { font-size: 28px; font-weight: 800; color: var(--accent); margin-top: 2px; }
+
+  /* ── Main ── */
+  .main { padding: 40px 48px; overflow-y: auto; }
+
+  .page { display: none; }
+  .page.active { display: block; }
+
+  .page-header { margin-bottom: 32px; }
+  .page-header h1 { font-size: 32px; font-weight: 800; letter-spacing: -1px; }
+  .page-header p { color: var(--muted); font-size: 14px; margin-top: 6px; font-family: var(--mono); }
+
+  /* ── Cards grid ── */
+  .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+
+  .user-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px;
+    transition: border-color .2s, transform .2s;
+    position: relative; overflow: hidden;
+  }
+  .user-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .user-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    opacity: 0; transition: opacity .2s;
+  }
+  .user-card:hover::before { opacity: 1; }
+
+  .user-card .avatar {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 800; color: #fff;
+    margin-bottom: 12px;
+  }
+
+  .user-card .name { font-size: 16px; font-weight: 700; }
+  .user-card .email { font-size: 12px; color: var(--muted); font-family: var(--mono); margin-top: 2px; }
+
+  .user-card .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .tag {
+    font-size: 11px; padding: 3px 8px; border-radius: 20px;
+    font-family: var(--mono); font-weight: 500;
+  }
+  .tag-notif { background: rgba(74,222,128,.1); color: var(--green); border: 1px solid rgba(74,222,128,.2); }
+  .tag-dark  { background: rgba(124,106,247,.1); color: var(--accent); border: 1px solid rgba(124,106,247,.2); }
+  .tag-premium { background: rgba(251,191,36,.1); color: var(--yellow); border: 1px solid rgba(251,191,36,.2); }
+  .tag-addr  { background: rgba(248,106,143,.1); color: var(--accent2); border: 1px solid rgba(248,106,143,.2); }
+
+  .card-actions { display: flex; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+
+  /* ── Buttons ── */
+  .btn {
+    padding: 8px 16px; border-radius: 8px; border: none;
+    font-family: var(--font); font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all .15s ease; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #9080fa; }
+  .btn-danger  { background: rgba(248,113,113,.1); color: var(--red); border: 1px solid rgba(248,113,113,.2); }
+  .btn-danger:hover { background: rgba(248,113,113,.2); }
+  .btn-ghost   { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+  .btn-full { width: 100%; justify-content: center; }
+
+  /* ── Modal ── */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,.7);
+    backdrop-filter: blur(4px); z-index: 100;
+    display: none; align-items: center; justify-content: center;
+  }
+  .modal-backdrop.open { display: flex; }
+
+  .modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 32px; width: 100%; max-width: 560px;
+    max-height: 90vh; overflow-y: auto;
+    animation: modalIn .2s ease;
+  }
+  @keyframes modalIn { from { opacity:0; transform: scale(.95) translateY(10px); } to { opacity:1; transform: none; } }
+
+  .modal h2 { font-size: 20px; font-weight: 800; margin-bottom: 24px; }
+
+  /* ── Form ── */
+  .form-group { margin-bottom: 16px; }
+  .form-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; display: block; margin-bottom: 6px; }
+  .form-input {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; color: var(--text);
+    font-family: var(--mono); font-size: 13px; transition: border-color .15s;
+    outline: none;
+  }
+  .form-input:focus { border-color: var(--accent); }
+
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; }
+  .toggle {
+    position: relative; width: 40px; height: 22px; cursor: pointer;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute; inset: 0; background: var(--border);
+    border-radius: 22px; transition: .2s;
+  }
+  .toggle-slider::before {
+    content: ''; position: absolute; height: 16px; width: 16px;
+    left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .2s;
+  }
+  .toggle input:checked + .toggle-slider { background: var(--accent); }
+  .toggle input:checked + .toggle-slider::before { transform: translateX(18px); }
+
+  /* ── Address block ── */
+  .addr-block {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px; margin-bottom: 10px; position: relative;
+  }
+  .addr-block .remove-addr {
+    position: absolute; top: 10px; right: 10px;
+    background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px;
+  }
+  .addr-block .remove-addr:hover { color: var(--red); }
+
+  /* ── Advanced panel ── */
+  .adv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+  .adv-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px;
+  }
+  .adv-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+  .adv-card p { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 16px; font-family: var(--mono); }
+
+  /* ── Result display ── */
+  .result-box {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px; margin-top: 16px;
+    font-family: var(--mono); font-size: 12px; line-height: 1.6;
+    max-height: 320px; overflow-y: auto; white-space: pre-wrap; word-break: break-all;
+    color: var(--green);
+  }
+  .result-box.error { color: var(--red); }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 20px;
+    font-size: 14px; font-weight: 600; z-index: 200;
+    transform: translateY(80px); opacity: 0; transition: all .3s ease;
+    display: flex; align-items: center; gap: 10px;
+  }
+  #toast.show { transform: translateY(0); opacity: 1; }
+  #toast.success { border-color: var(--green); color: var(--green); }
+  #toast.error   { border-color: var(--red);   color: var(--red);   }
+
+  /* ── Empty state ── */
+  .empty {
+    text-align: center; padding: 80px 20px; color: var(--muted);
+  }
+  .empty .icon { font-size: 48px; margin-bottom: 16px; }
+  .empty p { font-size: 14px; font-family: var(--mono); }
+
+  /* ── Loader ── */
+  .loader { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 14px; font-family: var(--mono); padding: 40px 0; }
+  .spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  select.form-input { appearance: none; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">User<span>Vault</span></div>
+
+    <button class="nav-item active" onclick="showPage('users')">
+      <span class="icon">👤</span> Utilisateurs
+    </button>
+    <button class="nav-item" onclick="showPage('advanced')">
+      <span class="icon">⚡</span> Requêtes avancées
+    </button>
+
+    <div class="sidebar-sep"></div>
+
+    <button class="nav-item" onclick="loadUsers()">
+      <span class="icon">↺</span> Actualiser
+    </button>
+
+    <div class="stat-card" style="margin-top:auto">
+      <div class="label">Utilisateurs</div>
+      <div class="value" id="sidebar-count">—</div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+
+    <!-- Page: Users -->
+    <div class="page active" id="page-users">
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between">
+        <div>
+          <h1>Profils utilisateurs</h1>
+          <p>Gestion complète des profils — MongoDB</p>
+        </div>
+        <button class="btn btn-primary" onclick="openModal('create')">+ Nouveau profil</button>
+      </div>
+      <div id="users-container">
+        <div class="loader"><div class="spinner"></div> Chargement…</div>
+      </div>
+    </div>
+
+    <!-- Page: Advanced -->
+    <div class="page" id="page-advanced">
+      <div class="page-header">
+        <h1>Requêtes avancées</h1>
+        <p>Agrégations et mises à jour conditionnelles MongoDB</p>
+      </div>
+      <div class="adv-grid">
+
+        <div class="adv-card">
+          <h3>🔍 Filtrage avancé</h3>
+          <p>Utilisateurs avec notifications activées ET ≥ 2 adresses ($match + $expr + $size)</p>
+          <button class="btn btn-ghost btn-full" onclick="runAdvanced('filter')">Exécuter</button>
+          <div id="res-filter"></div>
+        </div>
+
+        <div class="adv-card">
+          <h3>↕ Tri + Projection</h3>
+          <p>Tous les utilisateurs triés par nom (A→Z) sans afficher l'email ($sort + $project)</p>
+          <button class="btn btn-ghost btn-full" onclick="runAdvanced('sorted')">Exécuter</button>
+          <div id="res-sorted"></div>
+        </div>
+
+        <div class="adv-card">
+          <h3>⭐ Mise à jour conditionnelle</h3>
+          <p>Passe les utilisateurs avec ≥ 2 adresses en <strong>premium</strong> (updateMany + $expr)</p>
+          <button class="btn btn-primary btn-full" onclick="runAdvanced('grant-premium')">Exécuter</button>
+          <div id="res-grant-premium"></div>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Modal Create / Edit -->
+<div class="modal-backdrop" id="modal-backdrop" onclick="closeModalOutside(event)">
+  <div class="modal">
+    <h2 id="modal-title">Nouveau profil</h2>
+
+    <div class="form-group">
+      <label class="form-label">Nom complet</label>
+      <input class="form-input" id="f-name" placeholder="Alice Martin" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Email</label>
+      <input class="form-input" id="f-email" type="email" placeholder="alice@example.com" />
+    </div>
+
+    <!-- Preferences -->
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:14px">Préférences</div>
+      <div class="form-group">
+        <label class="form-label">Thème</label>
+        <select class="form-input" id="f-theme">
+          <option value="light">☀️ Light</option>
+          <option value="dark">🌙 Dark</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Langue</label>
+        <select class="form-input" id="f-lang">
+          <option value="fr">🇫🇷 Français</option>
+          <option value="en">🇬🇧 English</option>
+          <option value="es">🇪🇸 Español</option>
+        </select>
+      </div>
+      <div class="toggle-row">
+        <span style="font-size:13px;font-weight:600">Notifications</span>
+        <label class="toggle">
+          <input type="checkbox" id="f-notif" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Addresses -->
+    <div style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Adresses</span>
+        <button class="btn btn-ghost btn-sm" onclick="addAddressBlock()">+ Ajouter</button>
+      </div>
+      <div id="addr-list"></div>
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+      <button class="btn btn-ghost" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" id="modal-submit-btn" onclick="submitForm()">Créer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+const API = 'http://localhost:8000';
+let editingId = null;
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = (type === 'success' ? '✓ ' : '✗ ') + msg;
+  el.className = 'show ' + type;
+  setTimeout(() => el.className = '', 3000);
+}
+
+// ── Fetch helpers ─────────────────────────────────────────────────────────────
+async function api(path, options = {}) {
+  const r = await fetch(API + path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({ detail: r.statusText }));
+    throw new Error(err.detail || 'Erreur API');
+  }
+  return r.status === 204 ? null : r.json();
+}
+
+// ── Load users ────────────────────────────────────────────────────────────────
+async function loadUsers() {
+  const container = document.getElementById('users-container');
+  container.innerHTML = '<div class="loader"><div class="spinner"></div> Chargement…</div>';
+  try {
+    const users = await api('/users');
+    document.getElementById('sidebar-count').textContent = users.length;
+    if (!users.length) {
+      container.innerHTML = '<div class="empty"><div class="icon">🗂️</div><p>Aucun utilisateur. Créez-en un !</p></div>';
+      return;
+    }
+    container.innerHTML = '<div class="cards-grid">' + users.map(renderCard).join('') + '</div>';
+  } catch(e) {
+    container.innerHTML = `<div class="empty"><div class="icon">⚠️</div><p>${e.message}</p></div>`;
+  }
+}
+
+function renderCard(u) {
+  const initials = u.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2);
+  const addrCount = (u.addresses || []).length;
+  let tags = '';
+  if (u.preferences?.notifications) tags += '<span class="tag tag-notif">🔔 Notifs</span>';
+  if (u.preferences?.theme === 'dark')  tags += '<span class="tag tag-dark">🌙 Dark</span>';
+  if (u.premium)                        tags += '<span class="tag tag-premium">⭐ Premium</span>';
+  if (addrCount > 0) tags += `<span class="tag tag-addr">📍 ${addrCount} adresse${addrCount > 1 ? 's' : ''}</span>`;
+
+  return `
+  <div class="user-card">
+    <div class="avatar">${initials}</div>
+    <div class="name">${escHtml(u.name)}</div>
+    <div class="email">${escHtml(u.email)}</div>
+    <div class="tags">${tags}</div>
+    <div class="card-actions">
+      <button class="btn btn-ghost btn-sm" onclick="openModal('edit','${u.id}')">✏️ Modifier</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}','${escHtml(u.name)}')">🗑️ Supprimer</button>
+    </div>
+  </div>`;
+}
+
+function escHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function openModal(mode, userId) {
+  editingId = null;
+  document.getElementById('addr-list').innerHTML = '';
+  document.getElementById('f-name').value = '';
+  document.getElementById('f-email').value = '';
+  document.getElementById('f-theme').value = 'light';
+  document.getElementById('f-lang').value = 'fr';
+  document.getElementById('f-notif').checked = true;
+
+  if (mode === 'create') {
+    document.getElementById('modal-title').textContent = 'Nouveau profil';
+    document.getElementById('modal-submit-btn').textContent = 'Créer';
+    document.getElementById('modal-backdrop').classList.add('open');
+  } else {
+    editingId = userId;
+    document.getElementById('modal-title').textContent = 'Modifier le profil';
+    document.getElementById('modal-submit-btn').textContent = 'Enregistrer';
+    api('/users/' + userId).then(u => {
+      document.getElementById('f-name').value = u.name || '';
+      document.getElementById('f-email').value = u.email || '';
+      document.getElementById('f-theme').value = u.preferences?.theme || 'light';
+      document.getElementById('f-lang').value  = u.preferences?.language || 'fr';
+      document.getElementById('f-notif').checked = u.preferences?.notifications !== false;
+      (u.addresses || []).forEach(a => addAddressBlock(a));
+      document.getElementById('modal-backdrop').classList.add('open');
+    }).catch(e => toast(e.message, 'error'));
+  }
+}
+
+function closeModal() { document.getElementById('modal-backdrop').classList.remove('open'); }
+function closeModalOutside(e) { if (e.target === document.getElementById('modal-backdrop')) closeModal(); }
+
+function addAddressBlock(addr = {}) {
+  const id = Date.now();
+  const block = document.createElement('div');
+  block.className = 'addr-block';
+  block.id = 'addr-' + id;
+  block.innerHTML = `
+    <button class="remove-addr" onclick="document.getElementById('addr-${id}').remove()">✕</button>
+    <div class="form-row" style="margin-bottom:8px">
+      <div><label class="form-label">Rue</label><input class="form-input addr-street" value="${escHtml(addr.street||'')}" placeholder="12 rue de la Paix"/></div>
+      <div><label class="form-label">Code postal</label><input class="form-input addr-zip" value="${escHtml(addr.zip_code||'')}" placeholder="75001"/></div>
+    </div>
+    <div class="form-row">
+      <div><label class="form-label">Ville</label><input class="form-input addr-city" value="${escHtml(addr.city||'')}" placeholder="Paris"/></div>
+      <div><label class="form-label">Pays</label><input class="form-input addr-country" value="${escHtml(addr.country||'France')}" placeholder="France"/></div>
+    </div>`;
+  document.getElementById('addr-list').appendChild(block);
+}
+
+function collectAddresses() {
+  return [...document.querySelectorAll('.addr-block')].map(b => ({
+    street: b.querySelector('.addr-street').value,
+    zip_code: b.querySelector('.addr-zip').value,
+    city: b.querySelector('.addr-city').value,
+    country: b.querySelector('.addr-country').value || 'France',
+  })).filter(a => a.street || a.city);
+}
+
+async function submitForm() {
+  const name  = document.getElementById('f-name').value.trim();
+  const email = document.getElementById('f-email').value.trim();
+  if (!name || !email) { toast('Nom et email requis', 'error'); return; }
+
+  const payload = {
+    name, email,
+    addresses: collectAddresses(),
+    preferences: {
+      theme: document.getElementById('f-theme').value,
+      language: document.getElementById('f-lang').value,
+      notifications: document.getElementById('f-notif').checked,
+    }
+  };
+
+  try {
+    if (editingId) {
+      await api('/users/' + editingId, { method: 'PUT', body: JSON.stringify(payload) });
+      toast('Profil mis à jour');
+    } else {
+      await api('/users', { method: 'POST', body: JSON.stringify(payload) });
+      toast('Profil créé');
+    }
+    closeModal();
+    loadUsers();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Delete ────────────────────────────────────────────────────────────────────
+async function deleteUser(id, name) {
+  if (!confirm(`Supprimer "${name}" ?`)) return;
+  try {
+    await api('/users/' + id, { method: 'DELETE' });
+    toast('Utilisateur supprimé');
+    loadUsers();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Advanced queries ──────────────────────────────────────────────────────────
+async function runAdvanced(type) {
+  const resEl = document.getElementById('res-' + type);
+  resEl.innerHTML = '<div class="result-box">⏳ Exécution…</div>';
+  try {
+    let data, path;
+    if (type === 'grant-premium') {
+      path = '/users/advanced/grant-premium';
+      data = await api(path, { method: 'POST' });
+    } else {
+      path = '/users/advanced/' + type;
+      data = await api(path);
+    }
+    resEl.innerHTML = `<div class="result-box">${JSON.stringify(data, null, 2)}</div>`;
+    if (type === 'grant-premium') { toast(data.message); loadUsers(); }
+  } catch(e) {
+    resEl.innerHTML = `<div class="result-box error">Erreur: ${e.message}</div>`;
+    toast(e.message, 'error');
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadUsers();
+</script>
+</body>
+</html>
